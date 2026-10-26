@@ -158,10 +158,11 @@
     mask-image: radial-gradient(circle at 30% 40%, #000 0%, transparent 72%);
   }
   .hero-grid {
-    display: block; padding: var(--s8) var(--s3) var(--s7);
+    display: grid; grid-template-columns: 1.05fr minmax(0, 0.92fr); gap: var(--s6);
+    align-items: center; padding: var(--s7) var(--s3);
     position: relative;
   }
-  .hero-copy { max-width: 880px; }
+  .hero-copy { max-width: 620px; }
   .hero-copy .eyebrow { margin-bottom: var(--s3); }
   .hero h1 { font-size: var(--t-4xl); letter-spacing: -0.035em; }
   .hero h1 em { font-style: normal; color: var(--green-text); }
@@ -198,6 +199,26 @@
   .brandart { display: block; padding: var(--s3) var(--s2) var(--s2); }
   .ba-svg { width: 100%; height: auto; display: block; }
   .ba-float { transform-box: fill-box; transform-origin: center; transform: rotate(15deg); }
+
+  /* ---------- Hero · orbe de cristal ---------- */
+  .hero-orb { position: relative; width: 100%; aspect-ratio: 1 / 1; min-height: 440px; align-self: center; }
+  .hero-orb #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  .hero-orb #stage:active { cursor: grabbing; }
+  .orb-live {
+    position: absolute; top: 4px; right: 6px; pointer-events: none;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: var(--ink-2);
+    display: inline-flex; align-items: center;
+  }
+  .orb-live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); margin-right: 8px; display: inline-block; animation: orbBlink 1.6s ease-in-out infinite; }
+  @keyframes orbBlink { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .orb-live .dot { animation: none; } }
+  .orb-hud {
+    position: absolute; left: 0; right: 0; bottom: 4px; padding: 0 6px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; pointer-events: none;
+  }
+  .orb-hud .data { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .06em; line-height: 1.7; font-variant-numeric: tabular-nums; }
+  .orb-hud .data b { color: var(--ink); font-weight: 400; }
+  .orb-hud .right { text-align: right; }
 
   /* ---------- Trust bar ---------- */
   .trustbar { background: var(--green-deep); color: #DFF7EC; position: relative; }
@@ -413,6 +434,8 @@
     .hero-grid { grid-template-columns: 1fr; gap: var(--s5); min-height: auto; padding: var(--s5) var(--s3) var(--s6); }
     .hero h1 { font-size: var(--t-3xl); }
     .diagram-panel { order: 2; }
+    .hero-orb { order: 2; min-height: 340px; }
+    .hero-orb #stage { touch-action: pan-y; }
     .trustbar .wrap { grid-template-columns: repeat(2,1fr); gap: var(--s4) var(--s3); }
     .stat { padding-left: 0; }
     .stat + .stat::before { display: none; }
@@ -434,6 +457,7 @@
   @media (max-width: 520px) {
     .svc-grid { grid-template-columns: 1fr; }
     .hero h1 { font-size: 34px; }
+    .hero-orb { min-height: 300px; }
     .sec-head h2, .final h2, .quote-doc .qd-head .t { font-size: var(--t-2xl); }
     .sticky-cta .btn { padding: 12px 10px; font-size: 13px; }
   }
@@ -503,6 +527,15 @@
         <span class="item"><span class="dot"></span>Diseño + desarrollo, un solo equipo</span>
         <span class="item"><span class="dot"></span>Presupuesto cerrado, sin sorpresas</span>
         <span class="item"><span class="dot"></span>Código 100% a tu nombre</span>
+      </div>
+    </div>
+
+    <div class="hero-orb">
+      <canvas id="stage" aria-label="Globo de cristal girando con conexiones de datos entre ciudades"></canvas>
+      <div class="orb-live" aria-hidden="true"><span class="dot"></span>EN VIVO</div>
+      <div class="orb-hud" aria-hidden="true">
+        <div class="data">LAT <b id="lat">04.53° N</b><br>LON <b id="lon">075.68° W</b></div>
+        <div class="data right">NODOS <b id="nodes">00</b><br>ENLACES <b id="links">00</b></div>
       </div>
     </div>
 
@@ -904,5 +937,500 @@
     });
   }
 
+})();
+</script>
+
+<!-- ===================== HERO · ORBE DE CRISTAL ===================== -->
+<script>
+(() => {
+const cv = document.getElementById('stage');
+if (!cv) return;
+const ctx = cv.getContext('2d');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let W, H, DPR, R, CX, CY;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = cv.clientWidth || innerWidth; H = cv.clientHeight || Math.max(440, innerHeight);
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  R = Math.min(W, H) * (W < 600 ? 0.3 : 0.27);
+  CX = W / 2; CY = H * 0.47;
+}
+addEventListener('resize', resize); resize();
+
+/* ---------- Continentes (contornos simplificados, lon/lat) ---------- */
+const LAND = [
+ [[-168,66],[-162,70],[-150,71],[-140,70],[-128,70],[-115,68],[-100,69],[-90,72],[-82,73],[-78,63],[-90,60],[-94,58],[-88,55],[-80,52],[-78,58],[-70,60],[-64,58],[-60,52],[-56,50],[-64,46],[-67,44],[-70,42],[-74,40],[-76,35],[-81,31],[-80,26],[-82,27],[-84,30],[-90,29],[-97,27],[-97,22],[-92,18],[-88,21],[-87,16],[-83,10],[-79,9],[-80,7],[-85,10],[-92,14],[-100,17],[-106,22],[-112,30],[-110,24],[-115,30],[-118,34],[-123,39],[-124,46],[-124,49],[-130,54],[-136,58],[-145,60],[-152,59],[-158,57],[-164,55],[-160,59],[-166,61],[-165,64]],
+ [[-55,60],[-44,60],[-38,65],[-22,70],[-20,77],[-18,82],[-35,83],[-60,82],[-72,78],[-68,76],[-58,75],[-52,70],[-53,66]],
+ [[-80,8],[-72,12],[-62,10],[-52,5],[-50,0],[-44,-2],[-35,-5],[-35,-9],[-39,-15],[-40,-22],[-48,-26],[-53,-34],[-58,-38],[-62,-40],[-65,-45],[-68,-50],[-69,-55],[-74,-52],[-74,-44],[-73,-36],[-71,-28],[-70,-18],[-76,-14],[-81,-6],[-80,-1],[-78,2]],
+ [[-10,36],[-9,43],[-2,44],[-4,48],[2,51],[8,54],[10,57],[5,58],[5,62],[12,66],[20,70],[30,70],[40,67],[44,68],[55,70],[68,72],[80,73],[100,77],[112,74],[130,72],[142,72],[160,70],[170,70],[180,68],[180,65],[173,61],[163,60],[160,54],[156,51],[155,57],[140,59],[135,55],[141,52],[140,48],[135,43],[130,42],[129,35],[126,37],[122,40],[121,37],[119,35],[122,31],[120,26],[116,23],[110,21],[106,20],[108,15],[109,11],[105,9],[103,11],[100,13],[101,6],[103,2],[100,3],[98,8],[98,15],[94,17],[92,22],[89,22],[86,20],[80,15],[80,10],[77,8],[73,16],[72,21],[67,25],[62,25],[57,26],[56,24],[59,22],[56,18],[52,16],[45,13],[43,15],[39,22],[35,28],[33,31],[35,36],[30,36],[27,37],[26,40],[23,39],[22,37],[20,40],[19,42],[14,45],[12,44],[16,41],[18,40],[16,38],[12,38],[10,44],[7,44],[3,43],[0,39],[-2,37],[-5,36]],
+ [[-17,21],[-16,14],[-17,13],[-12,8],[-8,4],[-2,5],[5,6],[9,4],[10,0],[13,-6],[12,-13],[12,-18],[15,-27],[18,-34],[22,-34],[27,-33],[32,-28],[35,-24],[35,-18],[40,-15],[40,-10],[39,-5],[42,-1],[48,4],[51,11],[44,11],[43,13],[38,18],[35,24],[33,30],[30,31],[20,32],[19,30],[10,34],[11,37],[3,37],[-2,35],[-6,36],[-10,30],[-13,27]],
+ [[44,-25],[47,-25],[50,-15],[49,-12],[44,-16]],
+ [[114,-22],[114,-34],[118,-35],[123,-34],[130,-32],[135,-35],[138,-35],[140,-38],[145,-39],[150,-37],[153,-31],[153,-25],[146,-19],[145,-15],[142,-11],[141,-17],[136,-12],[132,-11],[129,-15],[125,-14],[122,-18]],
+ [[-5,50],[1,51],[2,53],[-2,56],[-2,58],[-5,58],[-6,56],[-3,54],[-5,52]],
+ [[-10,52],[-6,52],[-6,55],[-8,55]],
+ [[130,31],[132,34],[136,34],[140,35],[141,38],[142,43],[145,44],[141,45],[139,40],[136,37],[133,35]],
+ [[95,5],[98,4],[104,-2],[106,-6],[102,-4],[96,2]],
+ [[109,1],[111,-3],[116,-4],[119,1],[117,7],[113,3]],
+ [[105,-6],[114,-7],[114,-8.5],[106,-7.5]],
+ [[131,-1],[138,-2],[146,-6],[150,-10],[143,-9],[138,-8],[133,-4]],
+ [[172,-34],[175,-37],[178,-38],[175,-41],[171,-44],[167,-46],[170,-46],[174,-41]],
+ [[-24,64],[-14,64],[-14,66.5],[-22,66.5]],
+ [[120,18],[122,18],[126,7],[122,7],[120,14]],
+ [[80,6],[82,7],[81,9.5],[79.8,8]],
+ [[-85,22],[-74,20],[-77,19.8],[-84,21.8]]
+];
+function inPoly(x, y, poly){
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+const COAST = LAND.map(poly => {
+  const out = [];
+  for (let i = 0; i < poly.length; i++){
+    const [a0, b0] = poly[i], [a1, b1] = poly[(i+1) % poly.length];
+    const n = Math.max(1, Math.ceil(Math.hypot(a1-a0, b1-b0) / 1.5));
+    for (let k = 0; k < n; k++){
+      const lo = (a0 + (a1-a0)*k/n) * Math.PI/180, la = (b0 + (b1-b0)*k/n) * Math.PI/180;
+      out.push([Math.cos(la)*Math.cos(lo), Math.sin(la), -Math.cos(la)*Math.sin(lo)]);
+    }
+  }
+  return out;
+});
+const isLand = (lon, lat) => lat < -70 || LAND.some(p => inPoly(lon, lat, p));
+
+/* puntos repartidos uniformemente sobre la esfera (espiral de Fibonacci) */
+const N = W < 600 ? 11000 : 20000;
+const dots = [];
+const GA = Math.PI * (3 - Math.sqrt(5));
+for (let i = 0; i < N; i++){
+  const y = 1 - (i / (N - 1)) * 2;
+  const r = Math.sqrt(1 - y * y);
+  const th = GA * i;
+  const x = Math.cos(th) * r, z = Math.sin(th) * r;
+  const lat = Math.asin(y) * 180 / Math.PI;
+  const lon = Math.atan2(-z, x) * 180 / Math.PI;
+  if (isLand(lon, lat)) dots.push([x, y, z, Math.random()]);
+}
+
+/* ---------- Nodos (ciudades) ---------- */
+const CITIES = [
+ [-75.68,4.53],[-74.07,4.71],[-3.70,40.42],[2.17,41.39],[-0.13,51.51],[2.35,48.86],[-74.0,40.71],[-118.24,34.05],[-99.13,19.43],
+ [-46.63,-23.55],[-58.38,-34.60],[-77.04,-12.05],[-70.65,-33.45],[139.69,35.68],[121.47,31.23],[103.82,1.35],[77.21,28.61],
+ [55.27,25.20],[31.24,30.04],[3.38,6.52],[18.42,-33.92],[36.82,-1.29],[151.21,-33.87],[13.40,52.52],[37.62,55.75],
+ [-79.38,43.65],[-87.63,41.88],[126.98,37.57],[100.50,13.75],[-122.42,37.77],[28.98,41.01],[174.76,-36.85],[-43.17,-22.91]
+];
+function ll2v(lon, lat){
+  const la = lat * Math.PI/180, lo = lon * Math.PI/180;
+  return [Math.cos(la)*Math.cos(lo), Math.sin(la), -Math.cos(la)*Math.sin(lo)];
+}
+const nodes = CITIES.map(([lo, la], i) => ({ v: ll2v(lo, la), ph: Math.random()*6.28, hub: i < 2 }));
+const MESH = [];
+for (let i = 0; i < nodes.length; i++) for (let j = i+1; j < nodes.length; j++){
+  const a = nodes[i].v, b = nodes[j].v;
+  const d = Math.acos(Math.min(1, a[0]*b[0]+a[1]*b[1]+a[2]*b[2]));
+  if (d < 0.62) MESH.push([i, j, Math.random()*6.28, 0.25 + Math.random()*0.35]);
+}
+const TAGS = [[0,'AI.CORE','99.4%'],[2,'NEURAL.LINK','SYNC'],[13,'MODEL.v4','12ms'],[9,'DATA.FLOW','OK'],[22,'INFERENCE','LIVE'],[6,'AGENT.07','RUN']];
+document.getElementById('nodes').textContent = String(nodes.length).padStart(2,'0');
+
+/* ---------- Rotación ---------- */
+let rotY = 0.25, tilt = 0.32, vel = -0.0022;
+let dragging = false, lastX = 0, lastY = 0, dragVel = 0;
+cv.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX, dy = e.clientY - lastY;
+  lastX = e.clientX; lastY = e.clientY;
+  dragVel = -dx * 0.006; rotY += dragVel;
+  tilt = Math.max(-0.9, Math.min(0.9, tilt + dy * 0.004));
+});
+const end = () => { dragging = false; };
+cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+
+let cy_, sy_, cx_, sx_;
+function proj(v, scale = 1){
+  const [x, y, z] = v;
+  const x1 = x * cy_ - z * sy_;
+  const z1 = x * sy_ + z * cy_;
+  const y2 = y * cx_ - z1 * sx_;
+  const z2 = y * sx_ + z1 * cx_;
+  return [CX + x1 * R * scale, CY - y2 * R * scale, z2];
+}
+
+/* ---------- Enlaces animados ---------- */
+const arcs = [];
+function slerp(a, b, t){
+  const d = Math.acos(Math.max(-1, Math.min(1, a[0]*b[0]+a[1]*b[1]+a[2]*b[2])));
+  if (d < 1e-4) return a.slice();
+  const s = Math.sin(d), k1 = Math.sin((1-t)*d)/s, k2 = Math.sin(t*d)/s;
+  return [a[0]*k1+b[0]*k2, a[1]*k1+b[1]*k2, a[2]*k1+b[2]*k2];
+}
+function spawnArc(){
+  let a = nodes[Math.random() < 0.35 ? (Math.random()*2|0) : (Math.random()*nodes.length|0)];
+  let b; do { b = nodes[Math.random()*nodes.length|0]; } while (b === a);
+  const d = Math.acos(a.v[0]*b.v[0]+a.v[1]*b.v[1]+a.v[2]*b.v[2]);
+  const pts = [];
+  const steps = 48;
+  for (let i = 0; i <= steps; i++){
+    const t = i / steps;
+    const p = slerp(a.v, b.v, t);
+    const h = 1 + Math.sin(Math.PI * t) * (0.06 + d * 0.11);
+    pts.push([p[0]*h, p[1]*h, p[2]*h]);
+  }
+  arcs.push({ pts, t: 0, speed: 0.0045 + Math.random()*0.004, life: 1, b });
+}
+for (let i = 0; i < 9; i++){ spawnArc(); arcs[i].t = Math.random(); }
+
+/* ---------- Anillos orbitales ---------- */
+const rings = [
+  { r: 1.22, inc: 0.38, node: 0.4, spd: 0.0018, sats: [0, 2.1] },
+  { r: 1.34, inc: -0.62, node: 1.9, spd: -0.0012, sats: [1.2] },
+  { r: 1.12, inc: 1.2, node: -0.8, spd: 0.0025, sats: [3.3, 0.5] }
+];
+let ringT = 0;
+function ringPoint(rg, a){
+  // círculo inclinado en espacio de pantalla-mundo (no rota con el globo)
+  const x = Math.cos(a) * rg.r, z = Math.sin(a) * rg.r;
+  const y = z * Math.sin(rg.inc); const zz = z * Math.cos(rg.inc);
+  const cn = Math.cos(rg.node), sn = Math.sin(rg.node);
+  const xr = x * cn - y * sn, yr = x * sn + y * cn;
+  return [CX + xr * R, CY - yr * R, zz];
+}
+
+/* ---------- Partículas ambientales ---------- */
+const motes = Array.from({length: 60}, () => ({
+  x: Math.random(), y: Math.random(), r: Math.random()*1.6+0.4, ch: Math.random() < 0.55 ? (Math.random() < 0.5 ? '0' : '1') : null, s: Math.random()*0.00025+0.00008, ph: Math.random()*6.28
+}));
+
+/* ---------- Dibujo ---------- */
+let t0 = performance.now(), frame = 0;
+function draw(now){
+  const dt = Math.min(50, now - t0); t0 = now; frame++;
+  const k = dt / 16.67;
+  if (!dragging){ dragVel *= 0.94; rotY += (vel + dragVel) * k * (reduce ? 0.3 : 1); tilt += (0.32 - tilt) * 0.01 * k; }
+  ringT += 0.016 * k;
+  const bob = reduce ? 0 : Math.sin(now / 1400) * R * 0.025;
+  CY = H * 0.47 + bob;
+
+  cy_ = Math.cos(rotY); sy_ = Math.sin(rotY); cx_ = Math.cos(tilt); sx_ = Math.sin(tilt);
+  ctx.clearRect(0, 0, W, H);
+
+  // partículas
+  for (const m of motes){
+    m.y -= m.s * k; if (m.y < -0.02) { m.y = 1.02; m.x = Math.random(); }
+    const a = 0.25 + 0.25 * Math.sin(now/900 + m.ph);
+    ctx.fillStyle = `rgba(0,200,136,${a})`;
+    const mx = m.x*W + Math.sin(now/3000+m.ph)*14, my = m.y*H;
+    if (m.ch){
+      if (Math.random() < 0.004) m.ch = m.ch === '0' ? '1' : '0';
+      ctx.font = `${9 + m.r*3}px ui-monospace, Menlo, monospace`;
+      ctx.fillText(m.ch, mx, my);
+    } else { ctx.beginPath(); ctx.arc(mx, my, m.r, 0, 6.283); ctx.fill(); }
+  }
+
+  // sombra en el suelo
+  const sh = ctx.createRadialGradient(CX, H*0.47 + R*1.38, 0, CX, H*0.47 + R*1.38, R*0.95);
+  const shA = 0.22 - bob / R * 1.2;
+  sh.addColorStop(0, `rgba(8,63,46,${shA})`); sh.addColorStop(0.5, `rgba(8,63,46,${shA*0.35})`); sh.addColorStop(1, 'rgba(8,63,46,0)');
+  ctx.save(); ctx.translate(CX, H*0.47 + R*1.38); ctx.scale(1, 0.18); ctx.translate(-CX, -(H*0.47 + R*1.38));
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(CX, H*0.47 + R*1.38, R*0.95, 0, 6.283); ctx.fill(); ctx.restore();
+
+  // halo exterior
+  const halo = ctx.createRadialGradient(CX, CY, R*0.9, CX, CY, R*1.55);
+  halo.addColorStop(0, 'rgba(0,200,136,0.16)'); halo.addColorStop(1, 'rgba(0,200,136,0)');
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(CX, CY, R*1.55, 0, 6.283); ctx.fill();
+
+  // anillos: mitad trasera
+  drawRings(false, now);
+
+  // cuerpo de cristal
+  const body = ctx.createRadialGradient(CX - R*0.35, CY - R*0.4, R*0.1, CX, CY, R);
+  body.addColorStop(0, 'rgba(255,255,255,0.55)');
+  body.addColorStop(0.55, 'rgba(214,246,230,0.32)');
+  body.addColorStop(0.9, 'rgba(160,230,200,0.34)');
+  body.addColorStop(1, 'rgba(0,165,112,0.38)');
+  ctx.fillStyle = body; ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.283); ctx.fill();
+
+  // puntos traseros (vistos a través del cristal)
+  ctx.fillStyle = 'rgba(8,63,46,0.09)';
+  ctx.beginPath();
+  for (const d of dots){
+    const p = proj(d);
+    if (p[2] >= 0) continue;
+    ctx.rect(p[0], p[1], 1.2, 1.2);
+  }
+  ctx.fill();
+
+  // retícula
+  ctx.lineWidth = 0.6;
+  for (let lat = -60; lat <= 60; lat += 30) gridLine(i => ll2v(i, lat), -180, 180);
+  for (let lon = -180; lon < 180; lon += 30) gridLine(i => ll2v(lon, i), -90, 90);
+
+  // puntos frontales, agrupados por tono para dibujar rápido
+  const lx = -0.45, ly = 0.55, lz = 0.7, NB = 10;
+  const buckets = Array.from({length: NB}, () => []);
+  const scanY = Math.sin(now/2600) * 0.95; const hot = [];
+  for (const d of dots){
+    const p = proj(d);
+    if (p[2] < 0) continue;
+    const x1 = (p[0]-CX)/R, y1 = -(p[1]-CY)/R;
+    const lit = Math.max(0, x1*lx + y1*ly + p[2]*lz);
+    const sh = Math.min(NB-1, Math.floor((lit*0.55 + Math.min(1, p[2]*2)*0.45) * NB));
+    buckets[sh].push(p[0], p[1], p[2]);
+    if (Math.abs(y1 - scanY) < 0.05) hot.push(p[0], p[1], p[2]);
+  }
+  const dotK = W < 600 ? 1.25 : 1;
+  for (let i = 0; i < NB; i++){
+    const f = i / (NB-1), B = buckets[i];
+    if (!B.length) continue;
+    ctx.fillStyle = `hsla(${162 - f*6},100%,${14 + f*24}%,${0.55 + f*0.45})`;
+    ctx.beginPath();
+    for (let j = 0; j < B.length; j += 3){
+      const s = (1.8 + Math.sqrt(B[j+2]) * 2.1) * dotK;
+      ctx.rect(B[j]-s/2, B[j+1]-s/2, s, s);
+    }
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(120,255,200,0.95)';
+  ctx.beginPath();
+  for (let j = 0; j < hot.length; j += 3){ const s = (2.4 + hot[j+2]*2.4) * dotK; ctx.rect(hot[j]-s/2, hot[j+1]-s/2, s, s); }
+  ctx.fill();
+
+  // haz de escaneo
+  ctx.save(); ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.283); ctx.clip();
+  const sy = CY - scanY * R;
+  const band = ctx.createLinearGradient(0, sy - R*0.22, 0, sy + R*0.04);
+  band.addColorStop(0, 'rgba(0,200,136,0)'); band.addColorStop(0.85, 'rgba(0,200,136,0.16)'); band.addColorStop(1, 'rgba(0,200,136,0)');
+  ctx.fillStyle = band; ctx.fillRect(CX - R, sy - R*0.22, R*2, R*0.26);
+  ctx.strokeStyle = 'rgba(0,200,136,0.75)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(CX - R, sy); ctx.lineTo(CX + R, sy); ctx.stroke();
+  ctx.restore();
+
+  // contornos de costa luminosos
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const pass of [[5, 0.16], [1.6, 0.95]]){
+    ctx.lineWidth = pass[0];
+    for (const line of COAST){
+      let prev = proj(line[line.length-1], 1.002);
+      ctx.beginPath();
+      let open = false;
+      for (const v of line){
+        const p = proj(v, 1.002);
+        if (p[2] > 0.02 && prev[2] > 0.02){
+          if (!open){ ctx.moveTo(prev[0], prev[1]); open = true; }
+          ctx.lineTo(p[0], p[1]);
+        } else open = false;
+        prev = p;
+      }
+      ctx.strokeStyle = `rgba(0,200,136,${pass[1]})`;
+      ctx.stroke();
+    }
+  }
+
+  // malla neuronal entre nodos cercanos
+  for (const [i, j, ph, sp] of MESH){
+    const p = proj(nodes[i].v, 1.004), q = proj(nodes[j].v, 1.004);
+    const z = Math.min(p[2], q[2]);
+    if (z < 0.05) continue;
+    const a = Math.min(1, z * 1.8);
+    ctx.strokeStyle = `rgba(8,63,46,${0.35*a})`; ctx.lineWidth = 0.8;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    ctx.setLineDash([]);
+    const t = ((now/1000) * sp + ph) % 1;
+    const x = p[0] + (q[0]-p[0])*t, y = p[1] + (q[1]-p[1])*t;
+    ctx.fillStyle = `rgba(0,200,136,${a})`;
+    ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 6.283); ctx.fill();
+  }
+
+  // enlaces
+  if (!reduce && frame % 40 === 0 && arcs.length < 16) spawnArc();
+  for (let i = arcs.length - 1; i >= 0; i--){
+    const A = arcs[i];
+    A.t += A.speed * k;
+    if (A.t > 1.6){ arcs.splice(i, 1); continue; }
+    drawArc(A, now);
+  }
+  document.getElementById('links').textContent = String(arcs.length).padStart(2,'0');
+
+  // nodos
+  for (const n of nodes){
+    const p = proj(n.v, 1.003);
+    if (p[2] < -0.05) continue;
+    const pulse = (now/1000 + n.ph) % 2 / 2;
+    const base = n.hub ? 4.2 : 2.6;
+    const a = Math.min(1, (p[2] + 0.05) * 2.5);
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], base*5);
+    g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.25, `rgba(0,200,136,${0.7*a})`); g.addColorStop(1, 'rgba(0,200,136,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], base*5, 0, 6.283); ctx.fill();
+    ctx.strokeStyle = `rgba(0,200,136,${(1-pulse)*0.7*a})`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(p[0], p[1], base + pulse * base * 4, 0, 6.283); ctx.stroke();
+    ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.beginPath(); ctx.arc(p[0], p[1], base*0.55, 0, 6.283); ctx.fill();
+  }
+
+  // etiquetas de datos
+  ctx.font = `600 ${W < 600 ? 9 : 10}px ui-monospace, Menlo, Consolas, monospace`;
+  for (const [ni, label, val] of TAGS){
+    const p = proj(nodes[ni].v, 1.003);
+    if (p[2] < 0.35) continue;
+    const a = Math.min(1, (p[2] - 0.35) * 3);
+    const side = p[0] < CX ? -1 : 1;
+    const ex = p[0] + side * R * 0.16, ey = p[1] - R * 0.12;
+    const txt = label + '  ' + val;
+    const tw = ctx.measureText(txt).width + 14;
+    const bx = side > 0 ? ex : ex - tw;
+    ctx.strokeStyle = `rgba(8,63,46,${0.55*a})`; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + side*R*0.06, ey); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.fillStyle = `rgba(255,255,255,${0.82*a})`;
+    ctx.fillRect(bx, ey - 9, tw, 18);
+    ctx.strokeStyle = `rgba(0,200,136,${0.9*a})`;
+    ctx.strokeRect(bx + 0.5, ey - 8.5, tw - 1, 17);
+    ctx.fillStyle = `rgba(0,200,136,${a})`; ctx.fillRect(side > 0 ? bx : bx + tw - 2, ey - 9, 2, 18);
+    ctx.fillStyle = `rgba(10,10,10,${a})`; ctx.textBaseline = 'middle';
+    ctx.fillText(label, bx + 7, ey + 0.5);
+    ctx.fillStyle = `rgba(11,165,116,${a})`;
+    ctx.fillText(val, bx + 7 + ctx.measureText(label + '  ').width, ey + 0.5);
+  }
+  ctx.textBaseline = 'alphabetic';
+
+  // borde del cristal y reflejos
+  const rim = ctx.createRadialGradient(CX, CY, R*0.86, CX, CY, R*1.02);
+  rim.addColorStop(0, 'rgba(255,255,255,0)'); rim.addColorStop(0.8, 'rgba(160,235,205,0.5)'); rim.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = rim; ctx.beginPath(); ctx.arc(CX, CY, R*1.02, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.283); ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX, CY, R, 0, 6.283); ctx.clip();
+  const spec = ctx.createRadialGradient(CX - R*0.42, CY - R*0.48, 0, CX - R*0.42, CY - R*0.48, R*0.55);
+  spec.addColorStop(0, 'rgba(255,255,255,0.4)'); spec.addColorStop(0.35, 'rgba(255,255,255,0.06)'); spec.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = spec; ctx.fillRect(CX - R, CY - R, R*2, R*2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = R*0.025; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(CX, CY, R*0.9, Math.PI*1.08, Math.PI*1.38); ctx.stroke();
+  const caustic = ctx.createRadialGradient(CX + R*0.35, CY + R*0.6, 0, CX + R*0.35, CY + R*0.6, R*0.5);
+  caustic.addColorStop(0, 'rgba(200,248,224,0.35)'); caustic.addColorStop(1, 'rgba(200,248,224,0)');
+  ctx.fillStyle = caustic; ctx.fillRect(CX - R, CY - R, R*2, R*2);
+  ctx.restore();
+
+  // anillos: mitad delantera
+  drawRings(true, now);
+  drawDial(now);
+
+  // coordenadas del punto frente al espectador
+  const lonC = (((rotY * 180/Math.PI - 90) % 360) + 540) % 360 - 180;
+  const latC = tilt * 180/Math.PI;
+  document.getElementById('lat').textContent = Math.abs(latC).toFixed(2).padStart(5,'0') + '° ' + (latC >= 0 ? 'N' : 'S');
+  document.getElementById('lon').textContent = Math.abs(lonC).toFixed(2).padStart(6,'0') + '° ' + (lonC >= 0 ? 'E' : 'W');
+
+  requestAnimationFrame(draw);
+}
+
+function drawDial(now){
+  const rr = R * 1.42, rot = now / 9000;
+  ctx.save(); ctx.translate(CX, CY);
+  // marcas de grados
+  for (let i = 0; i < 144; i++){
+    const a = rot + i / 144 * 6.283;
+    const long = i % 12 === 0, mid = i % 6 === 0;
+    const r1 = rr, r2 = rr + (long ? 9 : mid ? 5 : 3);
+    ctx.strokeStyle = `rgba(8,63,46,${long ? 0.45 : 0.18})`; ctx.lineWidth = long ? 1.2 : 0.7;
+    ctx.beginPath(); ctx.moveTo(Math.cos(a)*r1, Math.sin(a)*r1); ctx.lineTo(Math.cos(a)*r2, Math.sin(a)*r2); ctx.stroke();
+  }
+  // arcos segmentados que giran en sentido contrario
+  ctx.lineCap = 'butt';
+  const segs = [[0, 0.9, 2.2], [2.6, 3.1, 2.2], [3.6, 5.2, 1.2]];
+  for (const [a0, a1, w] of segs){
+    ctx.strokeStyle = 'rgba(0,200,136,0.75)'; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.arc(0, 0, rr - 7, a0 - rot*1.6, a1 - rot*1.6); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(0,200,136,0.3)'; ctx.lineWidth = 0.8;
+  ctx.setLineDash([1, 6]); ctx.beginPath(); ctx.arc(0, 0, rr + 18, 0, 6.283); ctx.stroke(); ctx.setLineDash([]);
+  // indicador que recorre el anillo
+  const ia = -rot * 3;
+  ctx.fillStyle = '#00C888';
+  ctx.beginPath(); ctx.arc(Math.cos(ia)*(rr+18), Math.sin(ia)*(rr+18), 3, 0, 6.283); ctx.fill();
+  ctx.restore();
+  // esquinas de encuadre
+  const b = Math.min(rr + 30, W / 2 - 16), L = R * 0.16;
+  ctx.strokeStyle = 'rgba(8,63,46,0.5)'; ctx.lineWidth = 1.4;
+  for (const [sx, sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]){
+    const x = CX + sx*b, y = CY + sy*b;
+    ctx.beginPath(); ctx.moveTo(x, y - sy*L); ctx.lineTo(x, y); ctx.lineTo(x - sx*L, y); ctx.stroke();
+  }
+}
+
+function gridLine(fn, from, to){
+  let prev = null;
+  for (let i = from; i <= to; i += 4){
+    const p = proj(fn(i));
+    if (prev){
+      const z = (p[2] + prev[2]) / 2;
+      ctx.strokeStyle = z >= 0 ? `rgba(11,165,116,${0.18 + z*0.22})` : `rgba(11,165,116,${0.06 + (1+z)*0.05})`;
+      ctx.beginPath(); ctx.moveTo(prev[0], prev[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+    }
+    prev = p;
+  }
+}
+
+function drawArc(A, now){
+  const n = A.pts.length - 1;
+  const head = Math.min(1, A.t), tail = Math.max(0, A.t - 0.6);
+  const fade = A.t > 1 ? 1 - (A.t - 1) / 0.6 : 1;
+  const P = A.pts.map(v => proj(v));
+  for (let i = Math.floor(tail*n); i < Math.floor(head*n); i++){
+    const p = P[i], q = P[i+1];
+    const z = (p[2] + q[2]) / 2;
+    const vis = z >= 0 ? 1 : 0.25;
+    const along = (i/n - tail) / Math.max(0.001, head - tail);
+    ctx.strokeStyle = `rgba(0,200,136,${(0.15 + along*0.75) * vis * fade})`;
+    ctx.lineWidth = 1 + along * 1.2;
+    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+  }
+  if (A.t <= 1){
+    const p = P[Math.floor(head*n)];
+    const vis = p[2] >= 0 ? 1 : 0.3;
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 9);
+    g.addColorStop(0, `rgba(255,255,255,${vis})`); g.addColorStop(0.4, `rgba(0,200,136,${0.6*vis})`); g.addColorStop(1, 'rgba(0,200,136,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], 9, 0, 6.283); ctx.fill();
+  } else if (A.t < 1.25){
+    // destello de llegada
+    const p = proj(A.b.v, 1.003); if (p[2] > 0){
+      const s = (A.t - 1) / 0.25;
+      ctx.strokeStyle = `rgba(0,200,136,${(1-s)*0.9})`; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(p[0], p[1], 4 + s*22, 0, 6.283); ctx.stroke();
+    }
+  }
+}
+
+function drawRings(front, now){
+  for (const rg of rings){
+    let prev = null;
+    for (let i = 0; i <= 120; i++){
+      const a = i / 120 * 6.283;
+      const p = ringPoint(rg, a);
+      if (prev && (p[2] >= 0) === front && (prev[2] >= 0) === front){
+        const dashA = 0.16 + 0.12 * Math.sin(a*6 - ringT*2);
+        ctx.strokeStyle = `rgba(11,165,116,${front ? dashA + 0.1 : dashA*0.6})`;
+        ctx.lineWidth = front ? 1 : 0.7;
+        ctx.beginPath(); ctx.moveTo(prev[0], prev[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+      }
+      prev = p;
+    }
+    for (const s0 of rg.sats){
+      const p = ringPoint(rg, s0 + ringT * rg.spd * 60);
+      if ((p[2] >= 0) !== front) continue;
+      const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 10);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.35, 'rgba(0,200,136,0.55)'); g.addColorStop(1, 'rgba(0,200,136,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], 10, 0, 6.283); ctx.fill();
+    }
+  }
+}
+
+requestAnimationFrame(draw);
 })();
 </script>
